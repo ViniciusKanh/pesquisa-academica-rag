@@ -246,131 +246,372 @@
   </div>
 
   <script>
-    // ============================
-    // CONFIG: ENDPOINT E TEMA
-    // ============================
-    let API = (localStorage.getItem('API') || 'http://localhost:8000').replace(/\/$/, '');
-    const epShown = document.getElementById('epShown');
-    const epLabel = document.getElementById('epLabel');
-    function renderEndpoint(){ epShown.textContent = `API: ${API}`; try{ epLabel.textContent = new URL(API).host; }catch{ epLabel.textContent = 'Endpoint'; } }
-    renderEndpoint();
+  // ============================
+  // CONFIG: ENDPOINT, TEMA, STATUS
+  // ============================
+  const THEME_KEY = 'THEME_MODE';
+  const API_KEY   = 'API';
 
-    document.getElementById('btnEndpoint').addEventListener('click', ()=>{
-      const ep = prompt('Defina o endpoint da API (ex.: https://sua-api.trycloudflare.com)', API);
-      if (!ep) return; try { new URL(ep); } catch { return alert('URL inválida.'); }
-      API = ep.replace(/\/$/, ''); localStorage.setItem('API', API); renderEndpoint(); toast('Endpoint atualizado');
-    });
+  // DOM helpers
+  const $ = (sel) => document.querySelector(sel);
 
-    // Tema claro/escuro
-    const THEME_KEY = 'THEME_MODE';
-    const savedTheme = localStorage.getItem(THEME_KEY);
-    if (savedTheme === 'light') document.body.classList.add('light');
-    document.getElementById('btnTheme').addEventListener('click', ()=>{
-      document.body.classList.toggle('light');
-      localStorage.setItem(THEME_KEY, document.body.classList.contains('light') ? 'light' : 'dark');
-    });
+  // Elements
+  const epShown   = $('#epShown');
+  const epLabel   = $('#epLabel');
+  const btnDocs   = $('#btnDocs');
+  const btnTheme  = $('#btnTheme');
+  const btnEndpoint = $('#btnEndpoint');
 
-    // Mostrar botão de Swagger se a API for local
-    try { if (new URL(API).host.includes('localhost')) document.getElementById('btnDocs').style.display='inline-flex'; } catch {}
+  // Estado global
+  let API = normalizeAPI(localStorage.getItem(API_KEY) || 'http://localhost:8000');
 
-    // ============================
-    // INGESTÃO (upload com barra de progresso)
-    // ============================
-    const drop = document.getElementById('dropzone');
-    const input = document.getElementById('pdfs');
-    const btnPick = document.getElementById('btnPick');
-    const chips = document.getElementById('chipList');
-    const statusEl = document.getElementById('ingestStatus');
-    const bar = document.getElementById('ingestBar');
-    const barWrap = bar.parentElement;
+  // Inicialização
+  renderEndpoint(API);
+  reflectThemeFromStorage();
+  // tenta checar saúde do endpoint (não bloqueante)
+  checkHealth(API).catch(()=>{});
 
-    btnPick.addEventListener('click', ()=> input.click());
-    drop.addEventListener('dragover', e=>{ e.preventDefault(); drop.classList.add('dragover'); });
-    drop.addEventListener('dragleave', ()=> drop.classList.remove('dragover'));
-    drop.addEventListener('drop', e=>{ e.preventDefault(); drop.classList.remove('dragover'); if(e.dataTransfer.files?.length){ input.files = e.dataTransfer.files; renderChips(); upload(); } });
-    input.addEventListener('change', ()=>{ renderChips(); upload(); });
+  // Troca endpoint
+  btnEndpoint.addEventListener('click', async () => {
+    const ep = prompt('Defina o endpoint da API (ex.: https://sua-api.trycloudflare.com)', API);
+    if (!ep) return;
 
-    function renderChips(){
-      chips.innerHTML = '';
-      const files = input.files || [];
-      [...files].forEach(f=>{
-        const el = document.createElement('span'); el.className = 'chip'; el.textContent = f.name; chips.appendChild(el);
-      })
+    const newAPI = normalizeAPI(ep);
+    if (!newAPI) {
+      alert('URL inválida.');
+      return;
     }
 
-    function upload(){
-      const files = input.files; if (!files || !files.length) { alert('Selecione pelo menos um PDF.'); return; }
-      const fd = new FormData(); for (const f of files) fd.append('files', f);
-      statusEl.textContent = 'Enviando e indexando…'; bar.style.width = '0%'; barWrap.style.display = 'block';
+    renderEndpoint(newAPI);
+    // testa /health para avisar o usuário
+    try {
+      await checkHealth(newAPI, {showToast:true});
+      API = newAPI;
+      localStorage.setItem(API_KEY, API);
+    } catch (err) {
+      toast('Falha ao verificar /health. Verifique CORS/URL.');
+      // volta para o antigo visualmente
+      renderEndpoint(API);
+    }
+  });
 
-      const xhr = new XMLHttpRequest(); xhr.open('POST', `${API}/ingest_files`);
-      xhr.upload.onprogress = (e)=>{ if (e.lengthComputable) { bar.style.width = Math.round((e.loaded / e.total) * 100) + '%'; } };
-      xhr.onload = ()=>{
-        bar.style.width = '100%';
+  // Tema claro/escuro
+  btnTheme.addEventListener('click', () => {
+    document.body.classList.toggle('light');
+    localStorage.setItem(
+      THEME_KEY,
+      document.body.classList.contains('light') ? 'light' : 'dark'
+    );
+  });
+
+  function reflectThemeFromStorage(){
+    const saved = localStorage.getItem(THEME_KEY);
+    if (saved === 'light') document.body.classList.add('light');
+  }
+
+  // Renderiza endpoint na UI e ajusta botão Swagger
+  function renderEndpoint(ep) {
+    const host = safeHost(ep);
+    epShown.textContent = `API: ${ep}`;
+    epLabel.textContent = host || 'Endpoint';
+
+    // Corrige o botão Swagger para abrir no endpoint (não no domínio do Pages)
+    btnDocs.onclick = () => window.open(`${ep}/docs`, '_blank');
+    // mostra o botão sempre (ou oculte se preferir só em localhost)
+    btnDocs.style.display = 'inline-flex';
+  }
+
+  // Normaliza URL do endpoint e remove trailing /
+  function normalizeAPI(raw) {
+    try {
+      // se o usuário colar sem esquema, assume https
+      const fixed = raw.trim().replace(/\s+/g, '');
+      const hasScheme = /^https?:\/\//i.test(fixed);
+      const u = new URL(hasScheme ? fixed : `https://${fixed}`);
+      // apenas http/https
+      if (!/^https?:$/i.test(u.protocol)) return '';
+      u.pathname = u.pathname.replace(/\/+$/, ''); // sem barra final
+      return u.toString().replace(/\/$/, '');
+    } catch {
+      return '';
+    }
+  }
+
+  function safeHost(ep) {
+    try { return new URL(ep).host; } catch { return ''; }
+  }
+
+  // Checa /health para dar feedback rápido
+  async function checkHealth(ep, {showToast=false} = {}) {
+    try {
+      const r = await fetch(`${ep}/health`, { method:'GET' });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const ok = await r.text(); // pode ser JSON ou texto simples
+      epShown.textContent = `API: ${ep} ✓`;
+      if (showToast) toast('Endpoint OK (health)'); 
+    } catch (e) {
+      epShown.textContent = `API: ${ep} ✗`;
+      if (showToast) toast('Endpoint NÃO respondeu /health');
+      throw e;
+    }
+  }
+
+  // ============================
+  // INGESTÃO (upload com barra de progresso)
+  // ============================
+  const drop      = $('#dropzone');
+  const input     = $('#pdfs');
+  const btnPick   = $('#btnPick');
+  const chips     = $('#chipList');
+  const statusEl  = $('#ingestStatus');
+  const bar       = $('#ingestBar');
+  const barWrap   = bar.parentElement;
+
+  // Mantemos os arquivos selecionados numa lista própria (FileList é read-only)
+  let selectedFiles = [];
+
+  btnPick.addEventListener('click', () => input.click());
+
+  drop.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    drop.classList.add('dragover');
+  });
+
+  drop.addEventListener('dragleave', () => drop.classList.remove('dragover'));
+
+  drop.addEventListener('drop', (e) => {
+    e.preventDefault();
+    drop.classList.remove('dragover');
+    if (e.dataTransfer?.files?.length) {
+      selectedFiles = filterPDFs(e.dataTransfer.files);
+      renderChips();
+      upload();
+    }
+  });
+
+  input.addEventListener('change', () => {
+    if (input.files?.length) {
+      selectedFiles = filterPDFs(input.files);
+      renderChips();
+      upload();
+    }
+  });
+
+  function filterPDFs(fileList) {
+    // aceita application/pdf e .pdf
+    return [...fileList].filter(f =>
+      f.type === 'application/pdf' || /\.pdf$/i.test(f.name)
+    );
+  }
+
+  function renderChips() {
+    chips.innerHTML = '';
+    if (!selectedFiles.length) return;
+
+    for (const f of selectedFiles) {
+      const el = document.createElement('span');
+      el.className = 'chip';
+      el.textContent = `${f.name} (${formatBytes(f.size)})`;
+      chips.appendChild(el);
+    }
+  }
+
+  function upload() {
+    if (!selectedFiles.length) {
+      alert('Selecione pelo menos um PDF.');
+      return;
+    }
+    const fd = new FormData();
+    for (const f of selectedFiles) fd.append('files', f);
+
+    statusEl.textContent = 'Enviando e indexando…';
+    bar.style.width = '0%';
+    barWrap.style.display = 'block';
+
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `${API}/ingest_files`);
+
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) {
+        const pct = Math.round((e.loaded / e.total) * 100);
+        bar.style.width = pct + '%';
+      }
+    };
+
+    xhr.onload = () => {
+      bar.style.width = '100%';
+      let payload = {};
+      try { payload = JSON.parse(xhr.responseText || '{}'); } catch {}
+
+      if (xhr.status >= 200 && xhr.status < 300) {
+        const listed = (payload.files || []).join(', ');
+        statusEl.innerHTML = `<span class="status ok">OK</span>: ${listed || 'Ingestão concluída.'}`;
+        toast('Ingestão concluída');
+      } else {
+        const msg = payload.detail || payload.error || `HTTP ${xhr.status}`;
+        statusEl.innerHTML = `<span class="status err">Erro:</span> ${msg}`;
+      }
+    };
+
+    xhr.onerror = () => {
+      statusEl.innerHTML = `<span class="status err">Erro de rede (verifique CORS/endpoint).`;
+    };
+
+    xhr.send(fd);
+  }
+
+  // ============================
+  // PERGUNTAR (typewriter + copiar/salvar)
+  // ============================
+  const askBtn   = $('#btnAsk');
+  const askSpin  = $('#spnAsk');
+  const kRange   = $('#k');
+  const kVal     = $('#kVal');
+  const q        = $('#q');
+  const answer   = $('#answer');
+
+  kRange.addEventListener('input', () => kVal.textContent = kRange.value);
+
+  $('#kHelp').addEventListener('click', () => {
+    $('#kPopover').classList.toggle('show');
+  });
+
+  askBtn.addEventListener('click', ask);
+  q.addEventListener('keydown', (e) => {
+    if (e.ctrlKey && e.key === 'Enter') ask();
+  });
+
+  // Permite cancelar requisições anteriores
+  let askAbort = null;
+
+  async function ask(){
+    const question = (q.value || '').trim();
+    const k = parseInt(kRange.value || '6', 10);
+
+    if (!question) { alert('Digite uma pergunta.'); return; }
+
+    // cancela anterior se houver
+    if (askAbort) askAbort.abort();
+    askAbort = new AbortController();
+
+    setBusy(true);
+    answer.innerHTML = '';
+    const placeholder = document.createElement('div');
+    placeholder.className = 'muted';
+    placeholder.innerHTML = '<span class="spinner"></span> Consultando…';
+    answer.appendChild(placeholder);
+
+    try {
+      const r = await fetch(`${API}/ask`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question, k }),
+        signal: askAbort.signal,
+      });
+
+      let text = '';
+      const ct = r.headers.get('content-type') || '';
+      if (ct.includes('application/json')) {
+        const j = await r.json();
+        if (!r.ok) throw new Error(j.detail || j.error || 'Falha no /ask');
+        text = j.answer || JSON.stringify(j, null, 2);
+      } else {
+        // fallback para texto
+        const t = await r.text();
+        if (!r.ok) throw new Error(t || `HTTP ${r.status}`);
         try {
-          const j = JSON.parse(xhr.responseText || '{}');
-          if (xhr.status >= 200 && xhr.status < 300) { statusEl.innerHTML = `<span class="status ok">OK</span>: ${(j.files||[]).join(', ')}`; toast('Ingestão concluída'); }
-          else { statusEl.innerHTML = `<span class="status err">Erro:</span> ${j.detail || 'Falha no ingest'}`; }
-        } catch { statusEl.innerHTML = `<span class="status err">Erro:</span> Resposta inválida`; }
-      };
-      xhr.onerror = ()=>{ statusEl.innerHTML = `<span class="status err">Erro de rede.`; };
-      xhr.send(fd);
+          const j = JSON.parse(t);
+          text = j.answer || t;
+        } catch {
+          text = t;
+        }
+      }
+
+      // Monta UI de resposta
+      answer.innerHTML = `
+        <div class="tools">
+          <button class="btn" id="btnCopy">Copiar</button>
+          <button class="btn" id="btnSave">Salvar .txt</button>
+        </div>
+      `;
+      const body = document.createElement('div');
+      body.style.animation = 'fadeIn .25s ease both';
+      body.textContent = '';
+      answer.appendChild(body);
+
+      typewriter(body, text, 6); // 6 ms/char (ajuste conforme preferir)
+
+      $('#btnCopy').onclick = () => copyToClipboard(text);
+      $('#btnSave').onclick = () => saveText(text, 'resposta.txt');
+
+      toast('Resposta recebida');
+    } catch (e) {
+      const msg = (e && e.message) ? e.message : String(e);
+      answer.innerHTML = `<span class="status err">Erro:</span> ${msg}. Verifique o endpoint, CORS e se o backend está rodando.`;
+    } finally {
+      setBusy(false);
     }
+  }
 
-    // ============================
-    // PERGUNTAR (typewriter + copiar/salvar)
-    // ============================
-    const askBtn = document.getElementById('btnAsk');
-    const askSpin = document.getElementById('spnAsk');
-    const kRange = document.getElementById('k');
-    const kVal = document.getElementById('kVal');
-    const q = document.getElementById('q');
-    const answer = document.getElementById('answer');
+  function setBusy(b){
+    askBtn.disabled = b;
+    askSpin.style.display = b ? 'inline-block' : 'none';
+  }
 
-    kRange.addEventListener('input', ()=> kVal.textContent = kRange.value);
+  // ============================
+  // Utilidades
+  // ============================
+  function typewriter(el, text, speedMsPerChar = 8) {
+    // Escreve de forma incremental; usa setInterval para taxa estável
+    let i = 0;
+    const len = text.length;
+    const id = setInterval(() => {
+      // escreve em blocos para acelerar em textos longos
+      el.textContent += text.slice(i, i + 4);
+      i += 4;
+      if (i >= len) {
+        clearInterval(id);
+        el.textContent = text; // garante fim exato
+      }
+    }, Math.max(1, speedMsPerChar));
+  }
 
-    document.getElementById('kHelp').addEventListener('click', ()=>{
-      document.getElementById('kPopover').classList.toggle('show');
-    });
+  function copyToClipboard(text) {
+    navigator.clipboard.writeText(text).then(() => toast('Copiado.'));
+  }
 
-    askBtn.addEventListener('click', ask);
-    q.addEventListener('keydown', (e)=>{ if(e.ctrlKey && e.key === 'Enter'){ ask(); } });
+  function saveText(text, filename) {
+    const blob = new Blob([text], { type:'text/plain' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+      URL.revokeObjectURL(a.href);
+      a.remove();
+    }, 0);
+  }
 
-    async function ask(){
-      const question = q.value.trim(); const k = parseInt(kRange.value || '6', 10);
-      if (!question) { alert('Digite uma pergunta.'); return; }
-      setBusy(true); answer.innerHTML = '';
-      const placeholder = document.createElement('div'); placeholder.className = 'muted'; placeholder.innerHTML = '<span class="spinner"></span> Consultando…'; answer.appendChild(placeholder);
+  function toast(msg) {
+    const t = document.createElement('div');
+    t.className = 'toast';
+    t.textContent = msg;
+    document.body.appendChild(t);
+    setTimeout(() => {
+      t.style.opacity = '0';
+      t.style.transform = 'translateY(10px)';
+      setTimeout(() => t.remove(), 250);
+    }, 2200);
+  }
 
-      try {
-        const r = await fetch(`${API}/ask`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question, k }) });
-        const j = await r.json(); if (!r.ok) throw new Error(j.detail || 'Falha no ask');
-        const text = j.answer || '';
-        answer.innerHTML = '<div class="tools">\
-          <button class="btn" id="btnCopy">Copiar</button>\
-          <button class="btn" id="btnSave">Salvar .txt</button>\
-        </div>';
-        const body = document.createElement('div'); body.style.animation = 'fadeIn .25s ease both'; body.textContent = ''; answer.appendChild(body);
-        typewriter(body, text, 8);
-        answer.querySelector('#btnCopy').onclick = ()=> copyToClipboard(text);
-        answer.querySelector('#btnSave').onclick = ()=> saveText(text, 'resposta.txt');
-        toast('Resposta recebida');
-      } catch (e) {
-        answer.innerHTML = `<span class="status err">Erro:</span> ${e.message}`;
-      } finally { setBusy(false); }
-    }
+  function formatBytes(bytes) {
+    const units = ['B','KB','MB','GB'];
+    let i = 0, n = Math.max(bytes, 0);
+    while (n >= 1024 && i < units.length - 1) { n /= 1024; i++; }
+    return `${n.toFixed(n < 10 && i > 0 ? 1 : 0)} ${units[i]}`;
+  }
+</script>
 
-    function setBusy(b){ askBtn.disabled = b; askSpin.style.display = b? 'inline-block': 'none'; }
-
-    // Animação de escrita (typewriter) — simples e leve
-    function typewriter(el, text){
-      let i = 0; const len = text.length; const step = () => { el.textContent += text.charAt(i++); if(i <= len) requestAnimationFrame(step); }; step();
-    }
-
-    // Utilidades
-    function copyToClipboard(text){ navigator.clipboard.writeText(text).then(()=> toast('Copiado.')); }
-    function saveText(text, filename){ const blob = new Blob([text], {type:'text/plain'}); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; a.click(); URL.revokeObjectURL(a.href); }
-    function toast(msg){ const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; document.body.appendChild(t); setTimeout(()=>{ t.style.opacity = '0'; t.style.transform = 'translateY(10px)'; setTimeout(()=> t.remove(), 250); }, 2200); }
-  </script>
 </body>
 </html>

@@ -14,6 +14,24 @@ from rag_academico_mvp_python import (
     clear_index as rag_clear,
 )
 
+
+app = FastAPI()
+
+origins = [
+    "http://localhost:8080",
+    "https://viniciuskanh.github.io",
+    "https://viniciuskanh.github.io/pesquisa-academica-rag",
+    # se usar domínio próprio ou outro host, adicione aqui
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Pastas padrão
 DATA_DIR = os.environ.get("DATA_DIR", "./data")
 UPLOAD_DIR = os.path.join(DATA_DIR, "uploads")
