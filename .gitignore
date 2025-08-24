@@ -1,0 +1,169 @@
+# =========================
+# SO / SISTEMA (Windows/macOS/Linux)
+# =========================
+# Windows
+Thumbs.db
+Desktop.ini
+*.lnk
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+# Linux e gerais
+.Trashes
+.fuse_hidden*
+.nfs*
+*~
+
+# =========================
+# PYTHON / FASTAPI / UVICORN
+# =========================
+__pycache__/
+*.py[cod]
+*$py.class
+
+# ambientes virtuais
+.venv/
+venv/
+env/
+ENV/
+env_RAG/
+# (às vezes criam venvs dentro de subpastas)
+**/.venv/
+**/venv/
+**/env/
+
+# build e distribuição
+build/
+dist/
+wheels/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+# testes e cobertura
+htmlcov/
+.tox/
+.nox/
+.pytest_cache/
+.coverage
+.coverage.*
+.cache/
+
+# jupyter
+.ipynb_checkpoints/
+.ipython/
+.profile_default/
+
+# logs / temporários
+logs/
+*.log
+*.out
+*.err
+tmp/
+temp/
+**/tmp/
+**/temp/
+*.tmp
+
+# bancos de dados locais e caches
+*.db
+*.sqlite
+*.sqlite3
+.cache/
+.mypy_cache/
+.pytype/
+.pyre/
+
+# =========================
+# RAG / TRANSFORMERS / MODELOS
+# =========================
+# pesos de modelos e artefatos grandes
+*.bin
+*.safetensors
+*.onnx
+*.pt
+*.pth
+*.ckpt
+*.h5
+*.pb
+*.tflite
+*.gguf
+
+# diretórios comuns para vetores/índices/caches
+chroma/
+chroma_db/
+chroma_db*/*
+vectorstore/
+indexes/
+index/
+data/           # ajuste se você quiser versionar dados
+datasets/       # ajuste se você quiser versionar datasets
+runs/
+outputs/
+output/
+
+# Hugging Face e caches locais
+.huggingface/
+**/huggingface/
+**/cache/
+
+# =========================
+# SEGREDOS / CREDENCIAIS
+# =========================
+.env
+.env.*
+!.env.example        # mantenha um exemplo sem segredos
+*.secret
+*.secrets
+secrets.*
+*.key
+*.pem
+*.crt
+*.p12
+*credentials*.json
+token*.json
+client_secret*.json
+auth*.json
+
+# =========================
+# FERRAMENTAS E IDEs
+# =========================
+# VS Code
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+# JetBrains
+.idea/
+*.iml
+# Outros
+*.code-workspace
+
+# =========================
+# FRONT-END (pasta web/)
+# =========================
+# Caso venha a usar bundlers/SSR no futuro, ignore artefatos:
+web/node_modules/
+web/.parcel-cache/
+web/.cache/
+web/dist/
+web/build/
+web/.next/
+web/out/
+# (mantenha index.html, CSS e JS autorais versionados)
+
+# =========================
+# GITHUB PAGES
+# =========================
+# NÃO ignore a pasta 'docs/' se você usar Pages a partir dela
+# docs/
+
+# =========================
+# OUTROS
+# =========================
+# Arquivos de projeto temporários do Office/OneDrive
+~$*
+
+# RAG docs grandes
+meus_papers/*
+!meus_papers/.gitkeep

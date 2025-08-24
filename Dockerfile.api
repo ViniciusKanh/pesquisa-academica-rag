@@ -1,0 +1,35 @@
+FROM python:3.11-slim
+
+
+# Dependências de sistema úteis para PyMuPDF e ciência de dados
+RUN apt-get update && apt-get install -y --no-install-recommends \
+build-essential curl ca-certificates \
+libglib2.0-0 libgl1 libstdc++6 \
+&& rm -rf /var/lib/apt/lists/*
+
+
+WORKDIR /app
+
+
+# Copia requisitos primeiro (melhor cache)
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+
+
+# Copia seu RAG e o server
+COPY rag_academico_mvp_python.py ./
+COPY server.py ./
+
+
+# Diretórios de dados
+RUN mkdir -p /app/rag_db /app/data/uploads
+ENV RAG_DB_PATH=/app/rag_db \
+DATA_DIR=/app/data \
+OLLAMA_HOST=http://ollama:11434 \
+OLLAMA_MODEL=llama3.1 \
+RERANK_ENABLED=1 \
+DEBUG_CONTEXTS=0
+
+
+EXPOSE 8000
+CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8000"]

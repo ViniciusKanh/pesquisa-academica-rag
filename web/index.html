@@ -1,0 +1,376 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>RAG Acadêmico</title>
+  <style>
+    /* ==========================
+       TEMA, RESET E ESTÉTICA
+       ========================== */
+    :root {
+      --bg: #0b0f17;
+      --bg-2: #0f1320;
+      --panel: rgba(255,255,255,0.06);
+      --panel-2: rgba(255,255,255,0.09);
+      --text: #e6edf3;
+      --muted: #9aa4ad;
+      --brand: #7c93ff;      /* base */
+      --brand-2: #9b5cff;    /* acento */
+      --ok: #2bd790;
+      --err: #ff6677;
+      --ring: rgba(124,147,255,.35);
+      --shadow: 0 24px 60px rgba(0,0,0,.35);
+      --glass: blur(10px) saturate(120%);
+    }
+    body.light {
+      --bg: #f7f8fc;
+      --bg-2: #eef1fb;
+      --panel: rgba(0,0,0,0.04);
+      --panel-2: rgba(0,0,0,0.06);
+      --text: #111827;
+      --muted: #5b6471;
+      --brand: #5a6bff;
+      --brand-2: #a155ff;
+      --ok: #17b67c;
+      --err: #e14d63;
+      --ring: rgba(90,107,255,.28);
+      --shadow: 0 20px 50px rgba(10,10,30,.12);
+      --glass: blur(8px) saturate(110%);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0; color: var(--text);
+      background:
+        radial-gradient(1200px 700px at 10% -10%, #1d1f33 0%, transparent 60%),
+        radial-gradient(900px 500px at 100% 0%, #1a1233 0%, transparent 60%),
+        linear-gradient(180deg, var(--bg-2), var(--bg));
+      font: 15px/1.55 Inter, ui-sans-serif, system-ui, Segoe UI, Roboto, Arial, sans-serif;
+      overflow-y: overlay;
+      accent-color: var(--brand);
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+    a { color: var(--brand); text-decoration: none; }
+
+    /* Orbes animadas de fundo (decorativo) */
+    .orbs::before, .orbs::after {
+      content: ""; position: fixed; inset: auto auto 10% -10%; width: 420px; height: 420px; border-radius: 50%;
+      background: radial-gradient(closest-side, rgba(124,147,255,.22), transparent 70%);
+      filter: blur(20px); z-index: -1; animation: float 12s ease-in-out infinite;
+    }
+    .orbs::after { left: auto; right: -10%; bottom: 20%; background: radial-gradient(closest-side, rgba(155,92,255,.2), transparent 70%); animation-duration: 14s; }
+    @keyframes float { 0%{ transform: translateY(0) } 50%{ transform: translateY(-16px) } 100%{ transform: translateY(0) } }
+
+    /* Layout */
+    .container { max-width: 1100px; margin: 0 auto; padding: 28px 16px 80px; }
+    .grid { display: grid; gap: 22px; }
+    .two { grid-template-columns: 1.15fr .85fr; }
+    @media (max-width: 980px) { .two { grid-template-columns: 1fr; } }
+
+    /* Cards e títulos */
+    .card {
+      background: linear-gradient(180deg, var(--panel-2), var(--panel));
+      border: 1px solid rgba(255,255,255,0.10);
+      border-radius: 18px; padding: 18px 18px 16px; box-shadow: var(--shadow);
+      backdrop-filter: var(--glass);
+      transform: translateY(8px); opacity: 0; animation: fadeUp .7s ease forwards;
+    }
+    .card:hover { border-color: rgba(255,255,255,0.16); }
+
+    .title { display:flex; align-items:center; gap:12px; margin: 0 0 10px; font-size: 18px; }
+    .title .dot { width:10px; height:10px; border-radius:50%; background:linear-gradient(135deg,var(--brand),var(--brand-2)); box-shadow:0 0 16px var(--ring); }
+    .muted { color: var(--muted); }
+
+    /* Hero */
+    .hero { display:flex; align-items:center; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
+    .brand {
+      font-weight: 800; letter-spacing:.2px; margin: 0; font-size: clamp(24px, 5vw, 38px);
+      background: linear-gradient(90deg, #cbd5ff, #b9a6ff, #9fd1ff);
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+      filter: drop-shadow(0 6px 18px rgba(124, 147, 255, .18));
+      animation: hue 10s ease-in-out infinite alternate;
+    }
+    @keyframes hue { from { filter: drop-shadow(0 6px 18px rgba(124,147,255,.18)); } to { filter: drop-shadow(0 6px 28px rgba(155,92,255,.25)); } }
+
+    .actions { display:flex; gap: 10px; align-items:center; }
+
+    /* Botões */
+    .btn {
+      --b1: var(--brand); --b2: var(--brand-2);
+      position: relative; display: inline-flex; align-items:center; gap:10px;
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
+      border: 1px solid rgba(255,255,255,.16); color: var(--text);
+      padding: 10px 14px; border-radius: 12px; cursor: pointer;
+      transition: transform .15s ease, border-color .2s ease, background .2s ease;
+      box-shadow: 0 10px 22px rgba(0,0,0,.22); overflow: hidden;
+    }
+    .btn:hover { transform: translateY(-1px); border-color: rgba(255,255,255,.28); }
+    .btn:active { transform: translateY(0); }
+    .btn.primary { border: none; }
+    .btn.primary::before { content:""; position:absolute; inset:0; border-radius:inherit; background: linear-gradient(90deg,var(--b1),var(--b2)); opacity:.18; z-index:0; filter: blur(6px); }
+    .btn .icon { width: 18px; height: 18px; }
+
+    /* Inputs */
+    .input, .textarea, .slider {
+      width: 100%; background: rgba(255,255,255,.04); color: var(--text);
+      border: 1px solid rgba(255,255,255,.14); border-radius: 12px; padding: 10px 12px;
+      outline: none; transition: border-color .2s ease, box-shadow .2s ease, background .2s ease;
+    }
+    .input:focus, .textarea:focus, .slider:focus { box-shadow: 0 0 0 4px var(--ring); border-color: rgba(255,255,255,.28); }
+    .textarea { min-height: 120px; resize: vertical; }
+
+    /* Dropzone */
+    .dropzone { border:1.5px dashed rgba(255,255,255,.20); border-radius: 14px; padding: 16px; text-align:center; background: rgba(255,255,255,.03); transition: border-color .2s ease, background .2s ease; }
+    .dropzone.dragover { border-color: var(--brand); background: rgba(124,147,255,.08); }
+    .chips { display:flex; gap:8px; flex-wrap: wrap; margin-top: 10px; }
+    .chip { padding: 6px 10px; border-radius: 999px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12); }
+
+    /* Sliders/ajuda */
+    .row { display:flex; align-items:center; gap:10px; }
+    .tag { font-size: 12px; color: var(--muted); padding: 4px 8px; border-radius: 999px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12); }
+    .help { cursor: pointer; opacity:.9; }
+    .popover { display:none; background: rgba(25,25,35,.9); color:#e9eeff; border:1px solid rgba(255,255,255,.18); border-radius:12px; padding: 12px; position: relative; box-shadow: var(--shadow); }
+    body.light .popover { background: #ffffff; color:#1d2230; }
+    .popover.show { display:block; animation: fadeIn .15s ease both; }
+
+    /* Progresso & status */
+    .progress { height: 8px; width: 100%; background: rgba(255,255,255,.06); border-radius: 999px; overflow: hidden; }
+    .bar { height: 100%; width: 0%; background: linear-gradient(90deg, var(--brand), var(--brand-2)); transition: width .2s ease; }
+    .status { margin-top:8px; font-size: 13px; }
+    .status.ok { color: var(--ok); }
+    .status.err { color: var(--err); }
+
+    /* Resposta */
+    .answer { background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.12); border-radius: 16px; padding: 14px; white-space: pre-wrap; min-height: 60px; box-shadow: inset 0 0 0 1px rgba(255,255,255,.04); animation: fadeIn .25s ease both; }
+    .answer .tools { display:flex; gap:8px; justify-content:flex-end; margin-bottom: 8px; }
+
+    .spinner { width: 18px; height: 18px; border: 3px solid rgba(255,255,255,.15); border-top-color: var(--brand); border-radius: 50%; animation: spin 1s linear infinite; display:inline-block; }
+
+    .toast { position: fixed; right: 16px; bottom: 16px; padding: 10px 14px; border-radius: 12px; background: rgba(18, 219, 142, .12); border: 1px solid rgba(18, 219, 142, .35); color: #b7ffdf; box-shadow: var(--shadow); opacity: 0; transform: translateY(10px); animation: toast .3s ease forwards; }
+
+    .foot { margin-top: 22px; display:flex; justify-content: space-between; align-items:center; gap:10px; color: var(--muted); font-size: 13px; flex-wrap:wrap; }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes fadeUp { to { opacity:1; transform: translateY(0); } }
+    @keyframes fadeIn { from { opacity:0 } to { opacity:1 } }
+    @keyframes toast { to { opacity:1; transform: translateY(0) } }
+  </style>
+</head>
+<body class="orbs">
+  <div class="container">
+    <!-- HERO -->
+    <div class="hero">
+      <h1 class="brand">RAG Acadêmico</h1>
+      <div class="actions">
+        <button class="btn" id="btnEndpoint" title="Definir endpoint da API">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09c.7 0 1.31-.41 1.51-1 .2-.59.05-1.25-.33-1.73l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06c.48.38 1.14.53 1.73.33.59-.2 1-.81 1-1.51V3a2 2 0 1 1 4 0v.09c0 .7.41 1.31 1 1.51.59.2 1.25.05 1.73-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06c-.38.48-.53 1.14-.33 1.73.2.59.81 1 1.51 1H21a2 2 0 1 1 0 4h-.09c-.7 0-1.31.41-1.51 1Z"/></svg>
+          <span id="epLabel">Endpoint</span>
+        </button>
+        <button class="btn" id="btnTheme" title="Alternar tema">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z"/></svg>
+          Tema
+        </button>
+        <button class="btn primary" id="btnDocs" onclick="location.href='/docs'" title="Abrir Swagger" style="display:none;">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M4 4v16"/><path d="M8 4v13a2 2 0 0 0 2 2h10"/></svg>
+          Swagger
+        </button>
+      </div>
+    </div>
+
+    <!-- INTRODUÇÃO DO PROJETO -->
+    <section class="card" style="animation-delay:.02s;">
+      <h2 class="title"><span class="dot"></span> Introdução</h2>
+      <p class="muted">Este projeto implementa um sistema <strong>RAG (Retrieval-Augmented Generation)</strong> acadêmico, <em>local-first</em>, que ingere PDFs científicos e responde a perguntas com base nos trechos relevantes recuperados do seu acervo. O fluxo é: <strong>Ingestão → Indexação vetorial (Chroma) → Re-ranking por relevância → Síntese pelo LLM (Ollama)</strong>, sempre com citações.</p>
+      <ul class="muted" style="margin-top:8px; line-height:1.65;">
+        <li><strong>Privacidade:</strong> os arquivos ficam no seu disco (<code>rag_db</code> e <code>data/uploads</code>).</li>
+        <li><strong>Reprodutibilidade:</strong> respostas citam <em>[Título, p. N]</em>.</li>
+        <li><strong>Controle:</strong> ajuste do parâmetro <strong>k</strong> (número de trechos recuperados) equilibra abrangência e precisão.</li>
+      </ul>
+    </section>
+
+    <div class="grid two">
+      <!-- INGESTÃO -->
+      <section class="card" id="cardIngest" style="animation-delay:.05s;">
+        <h2 class="title"><span class="dot"></span> Ingerir PDFs</h2>
+        <p class="muted">Arraste e solte aqui ou selecione um ou mais arquivos PDF para indexar.</p>
+
+        <div id="dropzone" class="dropzone">
+          <input id="pdfs" type="file" accept="application/pdf" multiple hidden />
+          <button class="btn" id="btnPick">Selecionar PDFs</button>
+          <div class="chips" id="chipList" aria-live="polite"></div>
+        </div>
+
+        <div class="status" id="ingestStatus"></div>
+        <div class="progress" aria-hidden="true" style="margin-top:10px; display:none;">
+          <div class="bar" id="ingestBar"></div>
+        </div>
+      </section>
+
+      <!-- PERGUNTAR -->
+      <section class="card" id="cardAsk" style="animation-delay:.08s;">
+        <h2 class="title"><span class="dot"></span> Perguntar</h2>
+        <div class="row" style="margin-bottom:8px; align-items:flex-start;">
+          <label for="k" class="tag">k = <span id="kVal">6</span></label>
+          <input id="k" class="slider" type="range" min="3" max="15" step="1" value="6" style="margin-left:6px;">
+          <span class="tag help" id="kHelp">O que é k?</span>
+        </div>
+        <div id="kPopover" class="popover" role="note" aria-live="polite" style="margin:-2px 0 10px;">
+          <strong>k</strong> é o número de <em>trechos</em> recuperados do índice para compor o contexto do LLM.
+          <ul style="margin:6px 0 0 16px; padding:0;">
+            <li><strong>Mais baixo (4–6):</strong> respostas mais focadas e curtas; menor latência.</li>
+            <li><strong>Médio (6–10):</strong> equilíbrio entre precisão e cobertura (recomendado).</li>
+            <li><strong>Mais alto (10–12+):</strong> maior cobertura/recall; pode aumentar custo e tempo.</li>
+          </ul>
+          <span class="muted">Dica: para perguntas amplas ou revisão de literatura, use k maior.</span>
+        </div>
+
+        <textarea id="q" class="textarea" rows="5" placeholder="Escreva sua pergunta… (Ctrl+Enter para enviar)"></textarea>
+        <div class="row" style="margin-top:10px;">
+          <button class="btn primary" id="btnAsk">
+            <span class="spinner" id="spnAsk" style="display:none"></span>
+            Perguntar
+          </button>
+          <span class="muted" id="hint">Atalho: <kbd>Ctrl</kbd>+<kbd>Enter</kbd></span>
+        </div>
+        <div class="answer" id="answer" style="margin-top:12px;"></div>
+      </section>
+    </div>
+
+    <div class="foot">
+      <div>Persistência local: <span class="tag">rag_db</span> • <span class="tag">uploads</span></div>
+      <div id="epShown" class="muted"></div>
+    </div>
+  </div>
+
+  <script>
+    // ============================
+    // CONFIG: ENDPOINT E TEMA
+    // ============================
+    let API = (localStorage.getItem('API') || 'http://localhost:8000').replace(/\/$/, '');
+    const epShown = document.getElementById('epShown');
+    const epLabel = document.getElementById('epLabel');
+    function renderEndpoint(){ epShown.textContent = `API: ${API}`; try{ epLabel.textContent = new URL(API).host; }catch{ epLabel.textContent = 'Endpoint'; } }
+    renderEndpoint();
+
+    document.getElementById('btnEndpoint').addEventListener('click', ()=>{
+      const ep = prompt('Defina o endpoint da API (ex.: https://sua-api.trycloudflare.com)', API);
+      if (!ep) return; try { new URL(ep); } catch { return alert('URL inválida.'); }
+      API = ep.replace(/\/$/, ''); localStorage.setItem('API', API); renderEndpoint(); toast('Endpoint atualizado');
+    });
+
+    // Tema claro/escuro
+    const THEME_KEY = 'THEME_MODE';
+    const savedTheme = localStorage.getItem(THEME_KEY);
+    if (savedTheme === 'light') document.body.classList.add('light');
+    document.getElementById('btnTheme').addEventListener('click', ()=>{
+      document.body.classList.toggle('light');
+      localStorage.setItem(THEME_KEY, document.body.classList.contains('light') ? 'light' : 'dark');
+    });
+
+    // Mostrar botão de Swagger se a API for local
+    try { if (new URL(API).host.includes('localhost')) document.getElementById('btnDocs').style.display='inline-flex'; } catch {}
+
+    // ============================
+    // INGESTÃO (upload com barra de progresso)
+    // ============================
+    const drop = document.getElementById('dropzone');
+    const input = document.getElementById('pdfs');
+    const btnPick = document.getElementById('btnPick');
+    const chips = document.getElementById('chipList');
+    const statusEl = document.getElementById('ingestStatus');
+    const bar = document.getElementById('ingestBar');
+    const barWrap = bar.parentElement;
+
+    btnPick.addEventListener('click', ()=> input.click());
+    drop.addEventListener('dragover', e=>{ e.preventDefault(); drop.classList.add('dragover'); });
+    drop.addEventListener('dragleave', ()=> drop.classList.remove('dragover'));
+    drop.addEventListener('drop', e=>{ e.preventDefault(); drop.classList.remove('dragover'); if(e.dataTransfer.files?.length){ input.files = e.dataTransfer.files; renderChips(); upload(); } });
+    input.addEventListener('change', ()=>{ renderChips(); upload(); });
+
+    function renderChips(){
+      chips.innerHTML = '';
+      const files = input.files || [];
+      [...files].forEach(f=>{
+        const el = document.createElement('span'); el.className = 'chip'; el.textContent = f.name; chips.appendChild(el);
+      })
+    }
+
+    function upload(){
+      const files = input.files; if (!files || !files.length) { alert('Selecione pelo menos um PDF.'); return; }
+      const fd = new FormData(); for (const f of files) fd.append('files', f);
+      statusEl.textContent = 'Enviando e indexando…'; bar.style.width = '0%'; barWrap.style.display = 'block';
+
+      const xhr = new XMLHttpRequest(); xhr.open('POST', `${API}/ingest_files`);
+      xhr.upload.onprogress = (e)=>{ if (e.lengthComputable) { bar.style.width = Math.round((e.loaded / e.total) * 100) + '%'; } };
+      xhr.onload = ()=>{
+        bar.style.width = '100%';
+        try {
+          const j = JSON.parse(xhr.responseText || '{}');
+          if (xhr.status >= 200 && xhr.status < 300) { statusEl.innerHTML = `<span class="status ok">OK</span>: ${(j.files||[]).join(', ')}`; toast('Ingestão concluída'); }
+          else { statusEl.innerHTML = `<span class="status err">Erro:</span> ${j.detail || 'Falha no ingest'}`; }
+        } catch { statusEl.innerHTML = `<span class="status err">Erro:</span> Resposta inválida`; }
+      };
+      xhr.onerror = ()=>{ statusEl.innerHTML = `<span class="status err">Erro de rede.`; };
+      xhr.send(fd);
+    }
+
+    // ============================
+    // PERGUNTAR (typewriter + copiar/salvar)
+    // ============================
+    const askBtn = document.getElementById('btnAsk');
+    const askSpin = document.getElementById('spnAsk');
+    const kRange = document.getElementById('k');
+    const kVal = document.getElementById('kVal');
+    const q = document.getElementById('q');
+    const answer = document.getElementById('answer');
+
+    kRange.addEventListener('input', ()=> kVal.textContent = kRange.value);
+
+    document.getElementById('kHelp').addEventListener('click', ()=>{
+      document.getElementById('kPopover').classList.toggle('show');
+    });
+
+    askBtn.addEventListener('click', ask);
+    q.addEventListener('keydown', (e)=>{ if(e.ctrlKey && e.key === 'Enter'){ ask(); } });
+
+    async function ask(){
+      const question = q.value.trim(); const k = parseInt(kRange.value || '6', 10);
+      if (!question) { alert('Digite uma pergunta.'); return; }
+      setBusy(true); answer.innerHTML = '';
+      const placeholder = document.createElement('div'); placeholder.className = 'muted'; placeholder.innerHTML = '<span class="spinner"></span> Consultando…'; answer.appendChild(placeholder);
+
+      try {
+        const r = await fetch(`${API}/ask`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question, k }) });
+        const j = await r.json(); if (!r.ok) throw new Error(j.detail || 'Falha no ask');
+        const text = j.answer || '';
+        answer.innerHTML = '<div class="tools">\
+          <button class="btn" id="btnCopy">Copiar</button>\
+          <button class="btn" id="btnSave">Salvar .txt</button>\
+        </div>';
+        const body = document.createElement('div'); body.style.animation = 'fadeIn .25s ease both'; body.textContent = ''; answer.appendChild(body);
+        typewriter(body, text, 8);
+        answer.querySelector('#btnCopy').onclick = ()=> copyToClipboard(text);
+        answer.querySelector('#btnSave').onclick = ()=> saveText(text, 'resposta.txt');
+        toast('Resposta recebida');
+      } catch (e) {
+        answer.innerHTML = `<span class="status err">Erro:</span> ${e.message}`;
+      } finally { setBusy(false); }
+    }
+
+    function setBusy(b){ askBtn.disabled = b; askSpin.style.display = b? 'inline-block': 'none'; }
+
+    // Animação de escrita (typewriter) — simples e leve
+    function typewriter(el, text){
+      let i = 0; const len = text.length; const step = () => { el.textContent += text.charAt(i++); if(i <= len) requestAnimationFrame(step); }; step();
+    }
+
+    // Utilidades
+    function copyToClipboard(text){ navigator.clipboard.writeText(text).then(()=> toast('Copiado.')); }
+    function saveText(text, filename){ const blob = new Blob([text], {type:'text/plain'}); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; a.click(); URL.revokeObjectURL(a.href); }
+    function toast(msg){ const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; document.body.appendChild(t); setTimeout(()=>{ t.style.opacity = '0'; t.style.transform = 'translateY(10px)'; setTimeout(()=> t.remove(), 250); }, 2200); }
+  </script>
+</body>
+</html>
